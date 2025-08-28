@@ -104,7 +104,7 @@ GaussianObject is tested with Python 3.11. All the required packages are listed 
 
 ```sh
 # install pytorch
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # setup pip packages
 pip install -r requirements.txt

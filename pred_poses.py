@@ -144,9 +144,33 @@ if __name__ == "__main__":
     images = sorted(os.listdir(os.path.join(scene_path, 'images')))
     images = [os.path.join(scene_path, 'images', images[id]) for id in ids]
     original_images = [Image.open(image) for image in images]
-    masks = sorted(os.listdir(os.path.join(scene_path, 'masks')))
-    masks = [os.path.join(scene_path, 'masks', masks[id]) for id in ids]
-    original_masks = [np.array(Image.open(mask).resize(image.size))[:, :, 0] / 255.0 for mask, image in zip(masks, original_images)]
+    
+
+    # image shape alignment
+    aligned_images = []
+    # Get max width and height; pad with white background if not same, original image centered
+    max_width = max([image.size[0] for image in original_images])
+    max_height = max([image.size[1] for image in original_images])
+    for i in range(len(original_images)):
+        if original_images[i].size[0] != max_width or original_images[i].size[1] != max_height:
+            new_image = Image.new("RGB", (max_width, max_height), (255, 255, 255))
+            new_image.paste(original_images[i], ((max_width - original_images[i].size[0]) // 2, (max_height - original_images[i].size[1]) // 2))
+            original_images[i] = new_image
+            # save the new image
+            new_image_path = images[i][:-4] + '_aligned.jpg'
+            original_images[i].save(new_image_path)
+            aligned_images.append(new_image_path)
+        else:
+            aligned_images.append(images[i])
+    images = aligned_images
+
+    try:
+        masks = sorted(os.listdir(os.path.join(scene_path, 'masks')))
+        masks = [os.path.join(scene_path, 'masks', masks[id]) for id in ids]
+        original_masks = [np.array(Image.open(mask).resize(image.size))[:, :, 0] / 255.0 for mask, image in zip(masks, original_images)]
+    except:
+        masks = None
+        original_masks = [np.zeros((image.size[1], image.size[0])) for image in original_images]
 
     loaded_images = load_images(images, size=512)
     pairs = make_pairs(loaded_images, scene_graph='complete', prefilter=None, symmetrize=True)
@@ -199,7 +223,8 @@ if __name__ == "__main__":
         coords[coords < 0] = 0
         coords[:, 0, 1][coords[:, 0, 1] >= h] = h - 1
         coords[:, 0, 0][coords[:, 0, 0] >= w] = w - 1
-        visibility[mask[coords[:, 0, 1], coords[:, 0, 0]] < 0.5] = 0
+        if masks is not None:
+            visibility[mask[coords[:, 0, 1], coords[:, 0, 0]] < 0.5] = 0
 
     vertices = vertices[visibility]
     colors = colors[visibility]
