@@ -1,6 +1,8 @@
 import os
 import cv2
 import json
+import subprocess
+
 import numpy as np
 import trimesh
 import torch
@@ -8,6 +10,7 @@ import einops
 import argparse
 from PIL import Image
 from tqdm import trange
+
 from torch.nn import functional as F
 from dust3r.viz import pts3d_to_trimesh, cat_meshes
 from dust3r.inference import inference, load_model
@@ -147,28 +150,52 @@ if __name__ == "__main__":
     
 
     # image shape alignment
-    aligned_images = []
     # Get max width and height; pad with white background if not same, original image centered
     max_width = max([image.size[0] for image in original_images])
     max_height = max([image.size[1] for image in original_images])
+
+    # run command to copy folder images to images_original
+    subprocess.run(["cp", "-r", os.path.join(scene_path, 'images'), os.path.join(scene_path, "images_original")])
     for i in range(len(original_images)):
         if original_images[i].size[0] != max_width or original_images[i].size[1] != max_height:
             new_image = Image.new("RGB", (max_width, max_height), (255, 255, 255))
             new_image.paste(original_images[i], ((max_width - original_images[i].size[0]) // 2, (max_height - original_images[i].size[1]) // 2))
             original_images[i] = new_image
-            # save the new image
-            new_image_path = images[i][:-4] + '_aligned.jpg'
-            original_images[i].save(new_image_path)
-            aligned_images.append(new_image_path)
-        else:
-            aligned_images.append(images[i])
-    images = aligned_images
+            original_images[i].save(images[i])
 
     try:
         masks = sorted(os.listdir(os.path.join(scene_path, 'masks')))
         masks = [os.path.join(scene_path, 'masks', masks[id]) for id in ids]
         original_masks = [np.array(Image.open(mask).resize(image.size))[:, :, 0] / 255.0 for mask, image in zip(masks, original_images)]
     except:
+        # Save mask
+        masks_dir = os.path.join(scene_path, 'masks')
+        os.makedirs(masks_dir, exist_ok=True)
+
+        WHITE_THR = 250  # treat near-white as background
+
+        masks = []
+        original_masks = []
+        for img_path, pil_img in zip(images, original_images):
+            arr = np.array(pil_img)  # H x W x C
+
+            if arr.ndim == 2:  # grayscale
+                # foreground = anything not near-white
+                fg = arr < WHITE_THR
+            else:
+                if arr.shape[2] == 4:  # RGBA -> prefer alpha
+                    alpha = arr[:, :, 3]
+                    fg = alpha > 0
+                else:  # RGB
+                    fg = np.any(arr[:, :, :3] < WHITE_THR, axis=2)
+
+            mask_u8 = (fg.astype(np.uint8) * 255)  # 0 bg, 255 fg
+
+            mask_name = os.path.splitext(os.path.basename(img_path))[0] + '.png'
+            mask_path = os.path.join(masks_dir, mask_name)
+
+            Image.fromarray(mask_u8, mode='L').save(mask_path)
+
         masks = None
         original_masks = [np.zeros((image.size[1], image.size[0])) for image in original_images]
 

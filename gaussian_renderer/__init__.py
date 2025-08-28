@@ -11,8 +11,8 @@
 
 import torch
 import math
-from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
-from diff_gaussian_rasterization_w_pose import GaussianRasterizationSettings as GaussianRasterizationSettings_w_pose, GaussianRasterizer as GaussianRasterizer_w_pose
+# from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+from diff_gaussian_rasterization import GaussianRasterizationSettings as GaussianRasterizationSettings_w_pose, GaussianRasterizer as GaussianRasterizer_w_pose
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 
