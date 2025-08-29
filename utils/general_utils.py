@@ -9,33 +9,45 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-import torch
 import sys
 from datetime import datetime
 import numpy as np
 import random
 
+import cv2
+import torch
+
 def inverse_sigmoid(x):
     return torch.log(x/(1-x))
 
 def PILtoTorch(pil_image, resolution):
-    # justify the resolution, if resolution is already the same as the image, then return the image
-    if hasattr(pil_image, 'shape'):
-        if pil_image.shape[:2] != resolution[::-1]:
-            pil_image = pil_image.resize(resolution)
-    else:
-        if pil_image.size != resolution:
-            pil_image = pil_image.resize(resolution)
-    resized_image = torch.from_numpy(np.array(pil_image)) / 255.0
+    # Step 1: Standardize the input to a NumPy array.
+    # This correctly handles both PIL Image and NumPy array inputs.
+    image_np = np.array(pil_image)
 
-    # test cv2, Conculusion: cv2 is faster than PIL, but the resize result is different
-    # resized_image = cv2.resize(np.array(pil_image), resolution, interpolation=cv2.INTER_AREA)
-    # resized_image = torch.from_numpy(np.array(resized_image_PIL)) / 255.0
+    # Step 2: Resize only if necessary using cv2.resize.
+    # Note: image_np.shape is (Height, Width, Channels), but your resolution is (Width, Height).
+    current_h, current_w, _ = image_np.shape
+    target_w, target_h = resolution
 
-    if len(resized_image.shape) == 3:
-        return resized_image.permute(2, 0, 1)
+    if current_w != target_w or current_h != target_h:
+        # cv2.resize is the correct tool for resizing NumPy arrays.
+        # It expects the resolution tuple as (width, height).
+        resized_np = cv2.resize(image_np, resolution, interpolation=cv2.INTER_LINEAR)
     else:
-        return resized_image.unsqueeze(dim=-1).permute(2, 0, 1)
+        resized_np = image_np
+    
+    # Step 3: Convert the final NumPy array to a PyTorch tensor.
+    # np.ascontiguousarray ensures the memory layout is compatible with PyTorch.
+    resized_tensor = torch.from_numpy(np.ascontiguousarray(resized_np)) / 255.0
+
+    # Step 4: Permute dimensions from HWC to CHW, as required by PyTorch.
+    # This logic from your function is correct.
+    if len(resized_tensor.shape) == 3:
+        return resized_tensor.permute(2, 0, 1)
+    else:
+        # This handles grayscale images by adding a channel dimension.
+        return resized_tensor.unsqueeze(dim=-1).permute(2, 0, 1)
 
 def get_expon_lr_func(
     lr_init, lr_final, lr_delay_steps=0, lr_delay_mult=1.0, max_steps=1000000
